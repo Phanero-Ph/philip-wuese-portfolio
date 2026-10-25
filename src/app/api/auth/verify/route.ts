@@ -18,7 +18,15 @@ export async function POST(request: Request) {
     const verifier = authenticator.clone();
     verifier.options = { window: 1 };
     const normalizedCode = code.replace(/\s/g, "").toUpperCase();
-    const validAuthenticator = Boolean(user.two_factor_secret) && verifier.check(normalizedCode, decryptSecret(String(user.two_factor_secret)));
+    let validAuthenticator = false;
+    let secretUnreadable = false;
+    if (user.two_factor_secret) {
+      try {
+        validAuthenticator = verifier.check(normalizedCode, decryptSecret(String(user.two_factor_secret)));
+      } catch {
+        secretUnreadable = true;
+      }
+    }
     let recoveryHashes: string[] = [];
     if (user.two_factor_recovery_codes) {
       try {
@@ -32,7 +40,11 @@ export async function POST(request: Request) {
         if (await verify(normalizedCode, recoveryHashes[index])) { usedRecoveryIndex = index; break; }
       }
     }
-    if (!validAuthenticator && usedRecoveryIndex < 0) return NextResponse.json({ message: "The authenticator or recovery code is invalid. Wait for a new authenticator code and check that your device time is set automatically." }, { status: 422 });
+    if (!validAuthenticator && usedRecoveryIndex < 0) return NextResponse.json({
+      message: secretUnreadable
+        ? "This 2FA enrollment was encrypted with a different TOTP_ENCRYPTION_KEY. Restore the previous key, use a recovery code, or have the owner reset 2FA for this administrator."
+        : "The authenticator or recovery code is invalid. Wait for a new authenticator code and check that your device time is set automatically.",
+    }, { status: secretUnreadable ? 503 : 422 });
     if (usedRecoveryIndex >= 0) {
       recoveryHashes.splice(usedRecoveryIndex, 1);
       await db.execute("UPDATE users SET two_factor_recovery_codes=?,updated_at=NOW() WHERE id=?", [JSON.stringify(recoveryHashes), id]);

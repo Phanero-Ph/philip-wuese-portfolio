@@ -22,13 +22,22 @@ export async function POST(request: Request) {
       await createSession(sessionUser);
       return NextResponse.json({ authenticated: true, requires_two_factor: false, user: sessionUser });
     }
-    let secret = user.two_factor_secret ? decryptSecret(String(user.two_factor_secret)) : "";
-    if (!secret) {
+    const setup = !user.two_factor_confirmed_at;
+    let secret = "";
+    if (setup && user.two_factor_secret) {
+      try {
+        secret = decryptSecret(String(user.two_factor_secret));
+      } catch {
+        // An unfinished enrollment is safe to replace because no authenticator
+        // has been confirmed for it yet.
+        await db.execute("UPDATE users SET two_factor_secret=NULL,two_factor_recovery_codes=NULL,updated_at=NOW() WHERE id=?", [user.id]);
+      }
+    }
+    if (setup && !secret) {
       secret = authenticator.generateSecret();
       await db.execute("UPDATE users SET two_factor_secret=?, updated_at=NOW() WHERE id=?", [encryptSecret(secret), user.id]);
     }
     await createPendingSession(Number(user.id));
-    const setup = !user.two_factor_confirmed_at;
     const response: Record<string, unknown> = { authenticated: false, requires_two_factor: true, setup };
     if (setup) {
       const [cms] = await db.query<DbRow[]>("SELECT JSON_UNQUOTE(JSON_EXTRACT(payload, '$.settings.applicationName')) application_name FROM cms_states WHERE `key`='site' LIMIT 1");
