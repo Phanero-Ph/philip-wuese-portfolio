@@ -26,6 +26,8 @@ The deployment must support a persistent Node.js process. On Hostinger, use a pl
 
 Configure all values from `.env.example` in the hosting control panel. Do not upload `.env.local`. Copy `public`, including `public/storage` and `public/uploads`, with the deployment. Ensure the runtime can write to `public/uploads` or replace local media storage with an object-storage adapter.
 
+Set `NEXT_PUBLIC_APP_URL` to the exact public HTTPS origin used by visitors (for example, `https://portfolio.example.com`, without a trailing path). API origin protection also recognizes standard `X-Forwarded-Host` and `X-Forwarded-Proto` headers from Hostinger's reverse proxy.
+
 Before switching the domain, validate the hosting environment with `npm run check:production`. The command rejects missing secrets, placeholder values, invalid encryption keys, and a non-HTTPS public URL. Put the application behind Hostinger's HTTPS reverse proxy and enable process restart/health monitoring. The server binds to the platform-provided `PORT` and `HOSTNAME` values.
 
 The build automatically prepares `.next/standalone` with its static assets and public files. Deploy `package.json`, `.next/standalone`, and the writable media directory; retain `public/uploads` on persistent storage between releases. Database backups and uploaded-media backups should be scheduled independently.
