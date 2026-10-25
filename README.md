@@ -20,6 +20,8 @@ npm run build
 npm start
 ```
 
+Production builds use Next.js' stable Webpack compiler explicitly. This avoids host-specific Turbopack/PostCSS worker crashes while producing the same application and standalone server bundle.
+
 The deployment must support a persistent Node.js process. On Hostinger, use a plan with Node.js application hosting, select Node 22 or newer, set the application root to this directory, and use `.next/standalone/server.js` as the startup file.
 
 Configure all values from `.env.example` in the hosting control panel. Do not upload `.env.local`. Copy `public`, including `public/storage` and `public/uploads`, with the deployment. Ensure the runtime can write to `public/uploads` or replace local media storage with an object-storage adapter.
