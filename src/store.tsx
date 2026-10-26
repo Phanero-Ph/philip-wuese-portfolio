@@ -59,6 +59,15 @@ export type SiteState = {
   ctaClicks: Record<string, number>;
   activity: Activity[];
   pageViews: number;
+  analytics: {
+    visitors30: number;
+    visitorsPrevious30: number;
+    views7: Array<{ date: string; value: number }>;
+    viewsPrevious7: number;
+    cta7: Array<{ date: string; value: number }>;
+    devices30: Array<{ label: string; value: number }>;
+    sources30: Array<{ label: string; value: number }>;
+  };
   users: AdminUser[];
   services: Service[];
   nav: NavItem[];
@@ -124,6 +133,15 @@ function seedState(): SiteState {
       },
     ],
     pageViews: 0,
+    analytics: {
+      visitors30: 0,
+      visitorsPrevious30: 0,
+      views7: [],
+      viewsPrevious7: 0,
+      cta7: [],
+      devices30: [],
+      sources30: [],
+    },
     users: structuredClone(USERS_SEED),
     services: structuredClone(SERVICES),
     nav: structuredClone(NAV_DEFAULT),
@@ -192,19 +210,29 @@ export function StoreProvider({ children, initialState }: { children: ReactNode;
   useEffect(() => {
     let active = true;
     if (window.location.pathname !== "/admin") return;
-    void api<{ state: SiteState | null; authenticated: boolean }>("/api/state")
+    const loadState = (initial = false) => api<{ state: SiteState | null; authenticated: boolean }>("/api/state")
       .then(async (result) => {
         const defaults = seedState();
         const candidate = result.state ? { ...defaults, ...result.state } : defaults;
         const loaded = candidate;
         if (!active) return;
         authenticated.current = result.authenticated;
-        setState({ ...seedState(), ...loaded });
+        setState((previous) => initial
+          ? { ...seedState(), ...loaded }
+          : {
+              ...previous,
+              analytics: loaded.analytics,
+              pageViews: loaded.pageViews,
+              ctaClicks: loaded.ctaClicks,
+              leads: loaded.leads,
+            });
         hydrated.current = true;
         setReady(true);
       })
       .catch(() => setReady(true));
-    return () => { active = false; };
+    void loadState(true);
+    const interval = window.setInterval(() => { void loadState(false); }, 30_000);
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
 
   useEffect(() => {

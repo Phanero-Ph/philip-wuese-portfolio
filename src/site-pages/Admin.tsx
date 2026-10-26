@@ -68,29 +68,6 @@ const HUE_BG: Record<AdminUser["hue"], string> = {
   violet: "bg-violet-500",
 };
 
-const WEEK_BASE = [
-  { d: "Mon", v: 148 },
-  { d: "Tue", v: 176 },
-  { d: "Wed", v: 132 },
-  { d: "Thu", v: 201 },
-  { d: "Fri", v: 189 },
-  { d: "Sat", v: 96 },
-];
-
-const TRAFFIC_SOURCES = [
-  { label: "Direct", pct: 34 },
-  { label: "Google", pct: 28 },
-  { label: "LinkedIn", pct: 17 },
-  { label: "Referral", pct: 11 },
-  { label: "Other", pct: 10 },
-];
-
-const DEVICES = [
-  { label: "Desktop", pct: 58, icon: "blueprint" },
-  { label: "Mobile", pct: 34, icon: "phone" },
-  { label: "Tablet", pct: 8, icon: "layers" },
-];
-
 const fmt = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -364,6 +341,7 @@ function Login({ onSuccess }: { onSuccess: () => void }) {
 /* ============================ CHART PRIMITIVES ============================ */
 
 function Spark({ data, className }: { data: number[]; className?: string }) {
+  if (data.length < 2) return null;
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
@@ -400,20 +378,54 @@ function Dashboard() {
     CTA_REGISTRY[0]
   );
 
-  const days = [...WEEK_BASE, { d: "Sun", v: 118 + state.pageViews }];
-  const maxDay = Math.max(...days.map((x) => x.v));
+  const days = state.analytics.views7.map((item) => ({
+    d: new Date(`${item.date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short" }),
+    v: item.value,
+  }));
+  const maxDay = Math.max(1, ...days.map((x) => x.v));
   const weekTotal = days.reduce((a, b) => a + b.v, 0);
+  const change = (current: number, previous: number) => previous > 0 ? ((current - previous) / previous) * 100 : null;
+  const trendText = (current: number, previous: number, period: string) => {
+    const value = change(current, previous);
+    if (value === null) return previous === 0 && current > 0 ? `New activity · ${period}` : `No change · ${period}`;
+    return `${value >= 0 ? "▲" : "▼"} ${Math.abs(value).toFixed(1)}% vs ${period}`;
+  };
+  const visitorsTrend = change(state.analytics.visitors30, state.analytics.visitorsPrevious30);
+  const viewsTrend = change(weekTotal, state.analytics.viewsPrevious7);
+  const publishedThisMonth = state.articles.filter((article) => {
+    if (article.published === false) return false;
+    const date = new Date(article.date);
+    const now = new Date();
+    return !Number.isNaN(date.getTime()) && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  }).length;
+  const leadTrend = Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - offset));
+    return state.leads.filter((lead) => {
+      const created = new Date(lead.date);
+      return created.getFullYear() === date.getFullYear() && created.getMonth() === date.getMonth() && created.getDate() === date.getDate();
+    }).length;
+  });
+  const deviceTotal = state.analytics.devices30.reduce((sum, item) => sum + item.value, 0);
+  const devices = state.analytics.devices30.map((item) => ({
+    ...item,
+    pct: deviceTotal ? Math.round((item.value / deviceTotal) * 100) : 0,
+    icon: item.label === "Mobile" ? "phone" : item.label === "Tablet" ? "layers" : "blueprint",
+  }));
+  const sourceTotal = state.analytics.sources30.reduce((sum, item) => sum + item.value, 0);
+  const trafficSources = state.analytics.sources30.map((item) => ({ ...item, pct: sourceTotal ? Math.round((item.value / sourceTotal) * 100) : 0 }));
 
   const statusCounts = LEAD_STATUSES.map((s) => state.leads.filter((l) => l.status === s).length);
   const maxStatus = Math.max(1, ...statusCounts);
 
   const kpis = [
-    { label: "Visitors · 30 days", value: "1,342", sub: "▲ 12.4% vs last month", tone: "text-emerald-600", spark: [8, 10, 9, 12, 11, 14, 13, 16] },
-    { label: "Page views · 7 days", value: String(weekTotal), sub: "▲ 8.1% · live session", tone: "text-emerald-600", spark: days.map((d) => d.v) },
-    { label: "New leads", value: String(newLeads), sub: `${state.leads.length} total in pipeline`, tone: "text-amber-600", spark: [1, 0, 2, 1, 3, 2, 4, Math.max(newLeads, 2)] },
-    { label: "Projects", value: String(state.projects.length), sub: `${ongoing} ongoing now`, tone: "text-slate-500", spark: [3, 3, 4, 4, 5, 5, 6, state.projects.length] },
-    { label: "Articles", value: String(state.articles.length), sub: "2 published this month", tone: "text-slate-500", spark: [1, 1, 2, 2, 3, 3, 4, 4] },
-    { label: "CTA clicks", value: String(ctaTotal), sub: ctaTotal > 0 ? `Top: ${topCta.label}` : "Tracking active", tone: "text-slate-500", spark: [2, 4, 3, 6, 5, 8, 7, Math.max(ctaTotal, 8)] },
+    { label: "Visitors · 30 days", value: state.analytics.visitors30.toLocaleString(), sub: trendText(state.analytics.visitors30, state.analytics.visitorsPrevious30, "previous 30 days"), tone: visitorsTrend !== null && visitorsTrend < 0 ? "text-rose-600" : "text-emerald-600", spark: [] },
+    { label: "Page views · 7 days", value: String(weekTotal), sub: trendText(weekTotal, state.analytics.viewsPrevious7, "previous 7 days"), tone: viewsTrend !== null && viewsTrend < 0 ? "text-rose-600" : "text-emerald-600", spark: days.map((d) => d.v) },
+    { label: "New leads", value: String(newLeads), sub: `${state.leads.length} total in pipeline`, tone: "text-amber-600", spark: leadTrend },
+    { label: "Projects", value: String(state.projects.length), sub: `${ongoing} ongoing now`, tone: "text-slate-500", spark: [] },
+    { label: "Articles", value: String(state.articles.length), sub: `${publishedThisMonth} published this month`, tone: "text-slate-500", spark: [] },
+    { label: "CTA clicks", value: String(ctaTotal), sub: ctaTotal > 0 ? `Top: ${topCta.label}` : "No clicks recorded", tone: "text-slate-500", spark: state.analytics.cta7.map((item) => item.value) },
   ];
 
   return (
@@ -471,7 +483,7 @@ function Dashboard() {
 
         <Panel title="Devices" hint={<span className="text-[10px] font-bold text-slate-400">30 days</span>}>
           <div className="mt-6 space-y-6">
-            {DEVICES.map((d) => (
+            {devices.map((d) => (
               <div key={d.label}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="flex items-center gap-2.5 text-sm font-medium text-slate-700">
@@ -486,9 +498,7 @@ function Dashboard() {
               </div>
             ))}
           </div>
-          <p className="mt-auto pt-6 text-[11px] leading-relaxed text-slate-400">
-            Mobile keeps climbing — the site is mobile-first by design.
-          </p>
+          <p className="mt-auto pt-6 text-[11px] leading-relaxed text-slate-400">{deviceTotal ? `${deviceTotal} tracked page views in the last 30 days.` : "No device data recorded yet."}</p>
         </Panel>
       </div>
 
@@ -529,7 +539,7 @@ function Dashboard() {
 
         <Panel title="Traffic Sources" hint={<span className="text-[10px] font-bold text-slate-400">30 days</span>}>
           <div className="mt-6 space-y-4">
-            {TRAFFIC_SOURCES.map((s) => (
+            {trafficSources.map((s) => (
               <div key={s.label}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium text-slate-700">{s.label}</p>
@@ -541,9 +551,7 @@ function Dashboard() {
               </div>
             ))}
           </div>
-          <p className="mt-auto pt-6 text-[11px] leading-relaxed text-slate-400">
-            Direct + Google drive most visits; LinkedIn grows fastest.
-          </p>
+          <p className="mt-auto pt-6 text-[11px] leading-relaxed text-slate-400">{sourceTotal ? `${sourceTotal} sourced page views in the last 30 days.` : "No traffic-source data recorded yet."}</p>
         </Panel>
 
         <Panel title="CTA Performance" hint={<span className="text-[10px] font-bold text-slate-400">{ctaTotal} total</span>}>
