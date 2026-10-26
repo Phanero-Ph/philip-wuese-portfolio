@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { db, type DbRow } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { errorResponse } from "@/lib/http";
+import { normalizeMediaUrl } from "@/lib/media-url";
 
 const signatures: Array<{ mime: string; ext: string; valid: (b: Buffer) => boolean }> = [
   { mime: "image/jpeg", ext: "jpg", valid: b => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
@@ -14,7 +15,7 @@ const signatures: Array<{ mime: string; ext: string; valid: (b: Buffer) => boole
 ];
 
 export async function GET() {
-  try { await requireSession(); const [media] = await db.query<DbRow[]>("SELECT * FROM media ORDER BY created_at DESC"); return NextResponse.json({ media }); }
+  try { await requireSession(); const [media] = await db.query<DbRow[]>("SELECT * FROM media ORDER BY created_at DESC"); return NextResponse.json({ media: media.map(item => ({ ...item, path: normalizeMediaUrl(String(item.path || "")), url: normalizeMediaUrl(String(item.url || item.path || "")) })) }); }
   catch (error) { return errorResponse(error); }
 }
 

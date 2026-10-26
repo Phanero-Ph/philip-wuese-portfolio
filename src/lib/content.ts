@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { db, parseJson, type DbRow } from "@/lib/db";
+import { normalizeStoredMediaUrls } from "@/lib/media-url";
 
 const PRIVATE_KEYS = new Set(["users", "leads", "activity", "ctaClicks", "pageViews"]);
 
@@ -11,5 +12,5 @@ export const getSiteState = unstable_cache(async () => {
 
 export async function getPublicState() {
   const state = await getSiteState();
-  return Object.fromEntries(Object.entries(state).filter(([key]) => !PRIVATE_KEYS.has(key)));
+  return normalizeStoredMediaUrls(Object.fromEntries(Object.entries(state).filter(([key]) => !PRIVATE_KEYS.has(key))));
 }

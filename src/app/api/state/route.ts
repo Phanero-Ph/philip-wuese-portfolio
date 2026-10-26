@@ -4,13 +4,14 @@ import { db, parseJson, type DbRow } from "@/lib/db";
 import { getPublicState } from "@/lib/content";
 import { getSession, requireSession } from "@/lib/session";
 import { errorResponse } from "@/lib/http";
+import { normalizeStoredMediaUrls } from "@/lib/media-url";
 
 export async function GET() {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ state: await getPublicState(), authenticated: false });
     const [rows] = await db.query<DbRow[]>("SELECT payload FROM cms_states WHERE `key` = ? LIMIT 1", ["site"]);
-    const state = rows[0] ? parseJson<Record<string, unknown>>(rows[0].payload) : null;
+    const state = rows[0] ? normalizeStoredMediaUrls(parseJson<Record<string, unknown>>(rows[0].payload)) : null;
     if (state) {
       const [leadRows, userRows, viewRows, clickRows] = await Promise.all([
         db.query<DbRow[]>("SELECT public_id,name,email,phone,company,type,budget,timeline,description,attachment,source,status,notes,created_at FROM leads ORDER BY created_at DESC"),

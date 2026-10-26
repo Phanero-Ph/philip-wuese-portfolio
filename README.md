@@ -32,4 +32,6 @@ Before switching the domain, validate the hosting environment with `npm run chec
 
 The build automatically prepares `.next/standalone` with its static assets and public files. Deploy `package.json`, `.next/standalone`, and the writable media directory; retain `public/uploads` on persistent storage between releases. Database backups and uploaded-media backups should be scheduled independently.
 
+Legacy CMS media under `public/storage/media` is versioned and included in every deployment. New admin uploads are written to `public/uploads`; configure that directory as persistent storage on the hosting platform so uploaded files survive subsequent deployments.
+
 Switch the domain to this application only after production database, mail, media upload, login, 2FA, and CMS smoke tests pass.
