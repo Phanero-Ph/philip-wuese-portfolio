@@ -12,10 +12,12 @@ import {
 } from "@/components/ui";
 import ProjectCard from "@/components/ProjectCard";
 import NotFound from "@/site-pages/NotFound";
+import { normalizeSlug } from "@/utils/slug";
 
 export default function ProjectDetail({ slug }: { slug: string }) {
   const { state } = useStore();
-  const project = state.projects.find((p) => p.slug === slug);
+  const normalizedSlug = normalizeSlug(slug);
+  const project = state.projects.find((p) => normalizeSlug(p.slug) === normalizedSlug);
 
   if (!project) return <NotFound />;
 
