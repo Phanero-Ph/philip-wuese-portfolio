@@ -70,7 +70,7 @@ export async function PUT(request: Request) {
     if (!body.state || typeof body.state !== "object") return NextResponse.json({ message: "A valid state is required." }, { status: 422 });
     const { leads: _leads, users: _users, activity: _activity, ctaClicks: _ctaClicks, pageViews: _pageViews, analytics: _analytics, ...state } = body.state;
     await db.execute("UPDATE cms_states SET payload = ?, updated_at = NOW() WHERE `key` = ?", [JSON.stringify(state), "site"]);
-    revalidateTag("site-state", "max");
+    revalidateTag("site-state", { expire: 0 });
     return NextResponse.json({ saved: true });
   } catch (error) { return errorResponse(error); }
 }

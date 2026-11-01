@@ -22,7 +22,7 @@ export async function PUT(request: Request) {
     }
     await connection.execute("UPDATE cms_states SET payload = ?, updated_at = NOW() WHERE `key` = ?", [JSON.stringify(payload), "site"]);
     await connection.commit();
-    revalidateTag("site-state", "max");
+    revalidateTag("site-state", { expire: 0 });
     return NextResponse.json({ saved: true, sections: changes.map(([key]) => key) });
   } catch (error) { await connection.rollback(); return errorResponse(error); }
   finally { connection.release(); }

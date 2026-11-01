@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { api } from "@/api";
+import { usePathname } from "next/navigation";
+import { createContentPersistence } from "@/content-persistence";
 import {
   ARTICLES,
   CONTACT_CHANNELS,
@@ -175,6 +177,8 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 type Store = {
   ready: boolean;
   state: SiteState;
+  saveProjects: (projects: Project[]) => Promise<void>;
+  saveError: string | null;
   patchHero: (p: Partial<HeroContent>) => void;
   setSection: (key: SectionKey, visible: boolean) => void;
   updateProject: (id: string, p: Partial<Project>) => void;
@@ -204,12 +208,22 @@ const StoreContext = createContext<Store | null>(null);
 export function StoreProvider({ children, initialState }: { children: ReactNode; initialState: Record<string, unknown> }) {
   const [state, setState] = useState<SiteState>(() => ({ ...seedState(), ...(initialState as Partial<SiteState>) }));
   const [ready, setReady] = useState(true);
+  const pathname = usePathname();
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [persistence] = useState(() => createContentPersistence((sections) =>
+    api("/api/state/sections", { method: "PUT", body: JSON.stringify({ sections }) }),
+  ));
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const projectSavePending = useRef(false);
   const hydrated = useRef(true);
   const authenticated = useRef(false);
 
   useEffect(() => {
     let active = true;
-    if (window.location.pathname !== "/admin") return;
+    authenticated.current = false;
+    hydrated.current = false;
+    if (pathname !== "/admin") { setReady(true); return; }
+    setReady(false);
     const loadState = (initial = false) => api<{ state: SiteState | null; authenticated: boolean }>("/api/state")
       .then(async (result) => {
         const defaults = seedState();
@@ -217,6 +231,7 @@ export function StoreProvider({ children, initialState }: { children: ReactNode;
         const loaded = candidate;
         if (!active) return;
         authenticated.current = result.authenticated;
+        if (initial) persistence.hydrate(loaded);
         setState((previous) => initial
           ? { ...seedState(), ...loaded }
           : {
@@ -233,15 +248,19 @@ export function StoreProvider({ children, initialState }: { children: ReactNode;
     void loadState(true);
     const interval = window.setInterval(() => { void loadState(false); }, 30_000);
     return () => { active = false; window.clearInterval(interval); };
-  }, []);
+  }, [pathname, persistence]);
 
   useEffect(() => {
     if (!hydrated.current || !authenticated.current) return;
-    const timer = window.setTimeout(() => {
-      void api("/api/state", { method: "PUT", body: JSON.stringify({ state }) });
+    const timer = setTimeout(() => {
+      const otherSections = Object.fromEntries(Object.entries(state).filter(([key]) => key !== "projects"));
+      void persistence.save(projectSavePending.current ? otherSections : state).then(() => setSaveError(null)).catch((error: unknown) => {
+        setSaveError(error instanceof Error ? error.message : "Content could not be saved. Please try again.");
+      });
     }, 250);
-    return () => window.clearTimeout(timer);
-  }, [state]);
+    saveTimer.current = timer;
+    return () => clearTimeout(timer);
+  }, [state, persistence]);
 
   /* Live brand accent — overrides the design token across the whole site */
   useEffect(() => {
@@ -270,6 +289,18 @@ export function StoreProvider({ children, initialState }: { children: ReactNode;
     return {
       ready,
       state,
+      saveError,
+      saveProjects: async (projects) => {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        projectSavePending.current = true;
+        try {
+          await persistence.save({ projects });
+          setSaveError(null);
+          setState((prev) => push(prev, { projects }, "Saved projects"));
+        } finally {
+          projectSavePending.current = false;
+        }
+      },
       patchHero: (p) =>
         setState((prev) => push(prev, { hero: { ...prev.hero, ...p } }, "Updated hero content")),
       setSection: (key, visible) =>
@@ -466,7 +497,7 @@ export function StoreProvider({ children, initialState }: { children: ReactNode;
           return fresh;
         }),
     };
-  }, [state, ready]);
+  }, [state, ready, saveError, persistence]);
 
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

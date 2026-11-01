@@ -863,7 +863,7 @@ function LeadsView() {
 /* ============================ PROJECTS ============================ */
 
 function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => void }) {
-  const { state, addEntity, updateEntity } = useStore();
+  const { state, saveProjects } = useStore();
   const editIndex = editing ? editing.index : null;
   const p = editIndex !== null ? state.projects[editIndex] : null;
   const [f, setF] = useState(() => ({
@@ -896,8 +896,10 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
     featured: !!p?.featured,
   }));
   const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
+  const save = async () => {
+    if (saving) return;
     if (f.name.trim().length < 2) {
       setErr("Enter a project name.");
       return;
@@ -906,6 +908,7 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
     const desc = f.description.trim();
     const payload = {
       name: f.name.trim(),
+      slug: uniqSlug(state.projects.filter((_, index) => index !== editIndex).map((x) => x.slug), f.slug.trim() || slugify(f.name)),
       monogram: (f.monogram.trim() || initials(f.name)).slice(0, 2).toUpperCase(),
       tagline: tagline || "New project — add a tagline.",
       description: desc || tagline || "New project.",
@@ -932,12 +935,19 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
       preview: f.preview,
       cover: f.cover.trim() || undefined,
     };
-    if (p && editIndex !== null) {
-      updateEntity("projects", editIndex, payload);
-    } else if (!p) {
-      addEntity("projects", { id: newId("p"), slug: uniqSlug(state.projects.map((x) => x.slug), f.slug.trim() || slugify(f.name)), ...payload } as unknown as Record<string, unknown>);
+    setErr(null);
+    setSaving(true);
+    try {
+      const projects = p && editIndex !== null
+        ? state.projects.map((project, index) => index === editIndex ? { ...project, ...payload } : project)
+        : [...state.projects, { id: newId("p"), ...payload }];
+      await saveProjects(projects);
+      onClose();
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Project could not be saved. Please try again.");
+    } finally {
+      setSaving(false);
     }
-    onClose();
   };
 
   return (
@@ -945,15 +955,15 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
       wide
       title={p ? `Edit project — ${p.name}` : "New project"}
       subtitle={p ? `Currently live at /projects/${p.slug}` : "Creates a full project record with its own public page."}
-      onClose={onClose}
+      onClose={() => { if (!saving) onClose(); }}
       footer={
         <>
-          {err && <span className="mr-auto text-xs font-semibold text-rose-600">{err}</span>}
-          <button type="button" onClick={onClose} className={btnGhost}>
+          {err && <span role="alert" className="mr-auto text-xs font-semibold text-rose-600">{err}</span>}
+          <button type="button" onClick={onClose} disabled={saving} className={btnGhost}>
             Cancel
           </button>
-          <button type="button" onClick={save} className={btnPrimary}>
-            {p ? "Save changes" : "Create project"}
+          <button type="button" onClick={save} disabled={saving} className={btnPrimary}>
+            {saving ? "Saving…" : p ? "Save changes" : "Create project"}
           </button>
         </>
       }
@@ -1129,7 +1139,7 @@ function ProjectRow({ id, index }: { id: string; index: number }) {
 }
 
 function ProjectsView() {
-  const { state } = useStore();
+  const { state, saveError } = useStore();
   const [creating, setCreating] = useState(false);
 
   return (
@@ -1145,6 +1155,7 @@ function ProjectsView() {
       {state.projects.map((p, i) => (
         <ProjectRow key={p.id} id={p.id} index={i} />
       ))}
+      {saveError && <p role="alert" className="text-sm font-semibold text-rose-600">Changes could not be saved: {saveError}</p>}
       {creating && <ProjectForm editing={null} onClose={() => setCreating(false)} />}
     </div>
   );
