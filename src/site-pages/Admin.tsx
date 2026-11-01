@@ -897,9 +897,33 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
   }));
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  const uploadCover = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file || saving || uploadingCover) return;
+    setErr(null);
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || !file.size || file.size > 5 * 1024 * 1024) {
+      setErr("Choose a JPG, PNG, WebP, or GIF image no larger than 5 MB.");
+      return;
+    }
+    setUploadingCover(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("alt", f.name.trim() || "Project cover");
+      const result = await apiForm<{ media: { url: string } }>("/api/media", form);
+      setF((previous) => ({ ...previous, cover: result.media.url }));
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Cover image could not be uploaded. Please try again.");
+    } finally {
+      setUploadingCover(false);
+    }
+  };
 
   const save = async () => {
-    if (saving) return;
+    if (saving || uploadingCover) return;
     setErr(null);
     setSaving(true);
     try {
@@ -955,14 +979,14 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
       wide
       title={p ? `Edit project — ${p.name}` : "New project"}
       subtitle={p ? `Currently live at /projects/${p.slug}` : "Creates a full project record with its own public page."}
-      onClose={() => { if (!saving) onClose(); }}
+      onClose={() => { if (!saving && !uploadingCover) onClose(); }}
       footer={
         <>
           {err && <span role="alert" className="mr-auto text-xs font-semibold text-rose-600">{err}</span>}
-          <button type="button" onClick={onClose} disabled={saving} className={btnGhost}>
+          <button type="button" onClick={onClose} disabled={saving || uploadingCover} className={btnGhost}>
             Cancel
           </button>
-          <button type="button" onClick={save} disabled={saving} className={btnPrimary}>
+          <button type="button" onClick={save} disabled={saving || uploadingCover} className={btnPrimary}>
             {saving ? "Saving…" : p ? "Save changes" : "Create project"}
           </button>
         </>
@@ -979,8 +1003,15 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
         <Field label="Logo initials" hint="2 characters">
           <input value={f.monogram} onChange={(e) => setF({ ...f, monogram: e.target.value })} placeholder="OC" maxLength={2} className={cn(inputCls, "font-mono")} />
         </Field>
-        <Field label="Cover image URL" hint="Select or upload in Media Library" className="sm:col-span-2">
-          <input value={f.cover} onChange={(e) => setF({ ...f, cover: e.target.value })} placeholder="/storage/media/…" className={cn(inputCls, "font-mono text-xs")} />
+        <Field label="Cover image" hint="JPG, PNG, WebP or GIF · maximum 5 MB" className="sm:col-span-2">
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            {f.cover && <img src={f.cover} alt="Project cover preview" className="max-h-56 w-full rounded-lg bg-white object-contain" />}
+            <input type="file" aria-label="Upload project cover image" accept="image/jpeg,image/png,image/webp,image/gif" disabled={saving || uploadingCover} onChange={uploadCover} className={cn(inputCls, "file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-xs file:font-semibold")} />
+            <div className="flex items-center justify-between gap-3">
+              <p role="status" className="text-xs text-slate-500">{uploadingCover ? "Uploading cover image…" : "Choose an image, then save the project to publish it."}</p>
+              {f.cover && <button type="button" disabled={saving || uploadingCover} onClick={() => setF((previous) => ({ ...previous, cover: "" }))} className={miniBtn}>Remove cover</button>}
+            </div>
+          </div>
         </Field>
         <Field label="Category">
           <select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} className={inputCls}>
