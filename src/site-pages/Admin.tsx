@@ -878,7 +878,7 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
     results: (p?.results ?? []).map((r) => `${r.value} | ${r.label}`).join("\n"),
     category: p?.category ?? PROJECT_CATEGORIES[0],
     status: p?.status ?? ("completed" as ProjectStatus),
-    year: p?.year ?? String(new Date().getFullYear()),
+    year: String(p?.year ?? new Date().getFullYear()),
     preview: p?.preview ?? "browser",
     startDate: p?.startDate ?? "",
     endDate: p?.endDate ?? "",
@@ -900,44 +900,44 @@ function ProjectForm({ editing, onClose }: { editing: Editing; onClose: () => vo
 
   const save = async () => {
     if (saving) return;
-    if (f.name.trim().length < 2) {
-      setErr("Enter a project name.");
-      return;
-    }
-    const tagline = f.tagline.trim();
-    const desc = f.description.trim();
-    const payload = {
-      name: f.name.trim(),
-      slug: uniqSlug(state.projects.filter((_, index) => index !== editIndex).map((x) => x.slug), f.slug.trim() || slugify(f.name)),
-      monogram: (f.monogram.trim() || initials(f.name)).slice(0, 2).toUpperCase(),
-      tagline: tagline || "New project — add a tagline.",
-      description: desc || tagline || "New project.",
-      category: f.category,
-      status: f.status,
-      year: f.year.trim() || String(new Date().getFullYear()),
-      role: f.role.trim() || "Full-Stack Engineer",
-      client: f.client.trim() || "—",
-      stack: f.stack.split(",").map((s) => s.trim()).filter(Boolean),
-      domain: f.domain.trim() || "project.local",
-      liveUrl: f.liveUrl.trim() || undefined,
-      githubUrl: f.githubUrl.trim() || undefined,
-      appStoreUrl: f.appStoreUrl.trim() || undefined,
-      googlePlayUrl: f.googlePlayUrl.trim() || undefined,
-      seoTitle: f.seoTitle.trim() || undefined,
-      seoDesc: f.seoDesc.trim() || undefined,
-      startDate: f.startDate.trim() || undefined,
-      endDate: f.endDate.trim() || undefined,
-      featured: f.featured,
-      challenge: f.challenge.trim() || desc,
-      solution: f.solution.trim() || desc,
-      features: f.features.split("\n").map((line) => line.trim()).filter(Boolean),
-      results: f.results.split("\n").map((line) => { const [value, ...label] = line.split("|"); return { value: value.trim(), label: label.join("|").trim() }; }).filter((item) => item.value && item.label),
-      preview: f.preview,
-      cover: f.cover.trim() || undefined,
-    };
     setErr(null);
     setSaving(true);
     try {
+      if (f.name.trim().length < 2) {
+        setErr("Enter a project name.");
+        return;
+      }
+      const tagline = f.tagline.trim();
+      const desc = f.description.trim();
+      const payload = {
+        name: f.name.trim(),
+        slug: uniqSlug(state.projects.filter((_, index) => index !== editIndex).map((x) => x.slug), f.slug.trim() || slugify(f.name)),
+        monogram: (f.monogram.trim() || initials(f.name)).slice(0, 2).toUpperCase(),
+        tagline: tagline || "New project — add a tagline.",
+        description: desc || tagline || "New project.",
+        category: f.category,
+        status: f.status,
+        year: f.year.trim() || String(new Date().getFullYear()),
+        role: f.role.trim() || "Full-Stack Engineer",
+        client: f.client.trim() || "—",
+        stack: f.stack.split(",").map((s) => s.trim()).filter(Boolean),
+        domain: f.domain.trim() || "project.local",
+        liveUrl: f.liveUrl.trim() || undefined,
+        githubUrl: f.githubUrl.trim() || undefined,
+        appStoreUrl: f.appStoreUrl.trim() || undefined,
+        googlePlayUrl: f.googlePlayUrl.trim() || undefined,
+        seoTitle: f.seoTitle.trim() || undefined,
+        seoDesc: f.seoDesc.trim() || undefined,
+        startDate: f.startDate.trim() || undefined,
+        endDate: f.endDate.trim() || undefined,
+        featured: f.featured,
+        challenge: f.challenge.trim() || desc,
+        solution: f.solution.trim() || desc,
+        features: f.features.split("\n").map((line) => line.trim()).filter(Boolean),
+        results: f.results.split("\n").map((line) => { const [value, ...label] = line.split("|"); return { value: value.trim(), label: label.join("|").trim() }; }).filter((item) => item.value && item.label),
+        preview: f.preview,
+        cover: f.cover.trim() || undefined,
+      };
       const projects = p && editIndex !== null
         ? state.projects.map((project, index) => index === editIndex ? { ...project, ...payload } : project)
         : [...state.projects, { id: newId("p"), ...payload }];
